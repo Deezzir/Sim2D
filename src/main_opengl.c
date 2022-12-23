@@ -12,6 +12,7 @@
 #include "glextloader.c"
 
 // Function declarations
+// ---------------------
 const char* shader_type_as_cstr(GLuint shader);
 char* slurp_file_into_malloced_cstr(const char* file_path);
 bool compile_shader_source(const GLchar* source, GLenum shader_type, GLuint* shader);
@@ -25,6 +26,8 @@ void init_glfw_settings();
 GLFWwindow* init_glfw_window();
 void init_glfw_callbacks(GLFWwindow* window);
 void init_gl_settings();
+void init_gl_uniforms(GLuint program);
+void update_gl_uniforms(int width, int height);
 
 void message_callback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* userParam);
 void window_resize_callback(GLFWwindow* window, int width, int height);
@@ -32,9 +35,11 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 
 void generate_voronoi_seeds(void);
 
-void render_frame(double delta_time);
+void render_frame(double delta_time, int width, int height);
 void voronoi_loop(GLFWwindow* window);
 
+// Constants
+// ---------------------
 // Window properties
 #define DEFAULT_SCREEN_WIDTH 1600
 #define DEFAULT_SCREEN_HEIGHT 900
@@ -42,7 +47,7 @@ void voronoi_loop(GLFWwindow* window);
 
 // Voronoi properties
 #define SEED_COUNT 20
-#define SEED_MARKER_RADIUS 5
+#define SEED_RADIUS 3
 #define SEED_COLOR ((vec4){0.0f, 0.0f, 0.0f, 1.0f})
 
 // Shader paths
@@ -57,10 +62,23 @@ typedef struct {
     float x, y, z, w;
 } vec4;
 
-enum Attrib {
+typedef enum {
     ATTRIB_POS = 0,
     ATTRIB_COLOR,
     COUNT_ATTRIBS,
+} Attrib;
+
+typedef enum {
+    RESOLUTION_UNIFORM = 0,
+    SEED_COLOR_UNIFORM,
+    SEED_RADIUS_UNIFORM,
+    COUNT_UNIFORMS
+} Uniform;
+
+static const char* uniform_names[COUNT_UNIFORMS] = {
+    [RESOLUTION_UNIFORM] = "resolution",
+    [SEED_COLOR_UNIFORM] = "seed_color",
+    [SEED_RADIUS_UNIFORM] = "seed_radius",
 };
 
 static vec2 seed_positions[SEED_COUNT];
@@ -71,7 +89,10 @@ static bool pause = false;
 static double glfw_time = 0.0;
 static GLuint vao;
 static GLuint vbos[COUNT_ATTRIBS];
+static GLint uniforms[COUNT_UNIFORMS];
 
+// Main function
+// ---------------------
 int main(void) {
     srand(time(0));
     GLFWwindow* window;
@@ -91,13 +112,7 @@ int main(void) {
         exit(1);
     }
     glUseProgram(program);
-
-    GLint u_resolution = glGetUniformLocation(program, "resolution");
-    GLint u_radius = glGetUniformLocation(program, "radius");
-    GLint u_seed_color = glGetUniformLocation(program, "seed_color");
-    glUniform2f(u_resolution, DEFAULT_SCREEN_WIDTH, DEFAULT_SCREEN_HEIGHT);
-    glUniform4f(u_seed_color, SEED_COLOR.x, SEED_COLOR.y, SEED_COLOR.z, SEED_COLOR.w);
-    glUniform1i(u_radius, SEED_MARKER_RADIUS);
+    init_gl_uniforms(program);
 
     // RENDERING LOOP
     voronoi_loop(window);
@@ -282,12 +297,14 @@ GLFWwindow* init_glfw_window() {
 }
 
 void init_glfw_callbacks(GLFWwindow* window) {
+#ifdef DEBUG
     if (glDebugMessageCallback != NULL && glDebugMessageControl != NULL) {
         glEnable(GL_DEBUG_OUTPUT);
         glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
         glDebugMessageCallback(message_callback, 0);
-        glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DEBUG_SEVERITY_NOTIFICATION, 0, NULL, GL_TRUE);
+        glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, NULL, GL_TRUE);
     }
+#endif
     glfwSetKeyCallback(window, key_callback);
     glfwSetFramebufferSizeCallback(window, window_resize_callback);
 }
@@ -333,6 +350,20 @@ void init_gl_settings() {
     }
 }
 
+void init_gl_uniforms(GLuint program) {
+    for (Uniform i = 0; i < COUNT_UNIFORMS; i++) {
+        uniforms[i] = glGetUniformLocation(program, uniform_names[i]);
+    }
+
+    glUniform2f(uniforms[RESOLUTION_UNIFORM], DEFAULT_SCREEN_WIDTH, DEFAULT_SCREEN_HEIGHT);
+    glUniform4f(uniforms[SEED_COLOR_UNIFORM], SEED_COLOR.x, SEED_COLOR.y, SEED_COLOR.z, SEED_COLOR.w);
+    glUniform1i(uniforms[SEED_RADIUS_UNIFORM], SEED_RADIUS);
+}
+
+void update_gl_uniforms(int width, int height) {
+    glUniform2f(uniforms[RESOLUTION_UNIFORM], width, height);
+}
+
 // Callbacks
 void message_callback(GLenum source, GLenum type, GLuint id, GLenum severity,
                       GLsizei length, const GLchar* message, const void* userParam) {
@@ -355,6 +386,7 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
     (void)scancode;
     (void)action;
     (void)mods;
+    (void)window;
 
     if (action == GLFW_PRESS) {
         if (key == GLFW_KEY_SPACE) {
@@ -392,17 +424,17 @@ void generate_voronoi_seeds(void) {
 }
 
 // Rendering
-void render_frame(double delta_time) {
+void render_frame(double delta_time, int width, int height) {
     glClearColor(0.25f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     for (size_t i = 0; i < SEED_COUNT; ++i) {
         float x = seed_positions[i].x + seed_velocities[i].x * delta_time;
         float y = seed_positions[i].y + seed_velocities[i].y * delta_time;
-        if (x < 0.0f || x > DEFAULT_SCREEN_WIDTH) {
+        if (x < 0.0f || x > width) {
             seed_velocities[i].x *= -1.0f;
         }
-        if (y < 0.0f || y > DEFAULT_SCREEN_HEIGHT) {
+        if (y < 0.0f || y > height) {
             seed_velocities[i].y *= -1.0f;
         }
         seed_positions[i].y = y;
@@ -418,7 +450,11 @@ void voronoi_loop(GLFWwindow* window) {
     double delta_time = 0.0;
 
     while (!glfwWindowShouldClose(window)) {
-        render_frame(delta_time);
+        int width, height;
+        glfwGetWindowSize(window, &width, &height);
+        update_gl_uniforms(width, height);
+
+        render_frame(delta_time, width, height);
 
         glfwSwapBuffers(window);
         glfwPollEvents();
