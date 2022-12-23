@@ -42,7 +42,7 @@ void voronoi_loop(GLFWwindow* window);
 
 // Voronoi properties
 #define SEED_COUNT 20
-#define SEED_MARKER_RADIUS 3
+#define SEED_MARKER_RADIUS 5
 #define SEED_COLOR ((vec4){0.0f, 0.0f, 0.0f, 1.0f})
 
 // Shader paths
@@ -78,7 +78,7 @@ int main(void) {
     GLuint program;
 
     generate_voronoi_seeds();
-    
+
     init_glfw_settings();
 
     glfw_time = glfwGetTime();
@@ -87,7 +87,9 @@ int main(void) {
     init_glfw_callbacks(window);
     init_gl_settings();
 
-    if (!load_shader_program(VERTEX_FILE_PATH, FRAGMENT_FILE_PATH, &program)) { exit(1); }
+    if (!load_shader_program(VERTEX_FILE_PATH, FRAGMENT_FILE_PATH, &program)) {
+        exit(1);
+    }
     glUseProgram(program);
 
     GLint u_resolution = glGetUniformLocation(program, "resolution");
@@ -297,7 +299,7 @@ void init_gl_settings() {
 
     glGenVertexArrays(1, &vao);
     glBindVertexArray(vao);
-    
+
     glGenBuffers(COUNT_ATTRIBS, vbos);
 
     {
@@ -333,7 +335,7 @@ void init_gl_settings() {
 
 // Callbacks
 void message_callback(GLenum source, GLenum type, GLuint id, GLenum severity,
-                     GLsizei length, const GLchar* message, const void* userParam) {
+                      GLsizei length, const GLchar* message, const void* userParam) {
     (void)source;
     (void)id;
     (void)length;
@@ -391,7 +393,7 @@ void generate_voronoi_seeds(void) {
 
 // Rendering
 void render_frame(double delta_time) {
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClearColor(0.25f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     for (size_t i = 0; i < SEED_COUNT; ++i) {
@@ -405,11 +407,10 @@ void render_frame(double delta_time) {
         }
         seed_positions[i].y = y;
         seed_positions[i].x = x;
-
-        glBindBuffer(GL_ARRAY_BUFFER, vbos[ATTRIB_POS]);
-        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(seed_positions), seed_positions);
-        glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, SEED_COUNT);
     }
+    glBindBuffer(GL_ARRAY_BUFFER, vbos[ATTRIB_POS]);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(seed_positions), seed_positions);
+    glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, SEED_COUNT);
 }
 
 void voronoi_loop(GLFWwindow* window) {

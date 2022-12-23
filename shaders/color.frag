@@ -12,6 +12,6 @@ out vec4 out_color;
 
 void main(void) {
     int c = int(length(gl_FragCoord.xy - seed) >= radius);
-    gl_FragDepth = c *  length(gl_FragCoord.xy - seed)/length(resolution);
+    gl_FragDepth = c * length(gl_FragCoord.xy - seed)/length(resolution);
     out_color = c * color + (1 - c) * seed_color;
 }
