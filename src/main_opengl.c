@@ -11,8 +11,17 @@
 
 #include "glextloader.c"
 
+// Macros
+#define UNREACHABLE(message)                                                      \
+    do {                                                                          \
+        fprintf(stderr, "%s:%d: UNREACHABLE: %s\n", __FILE__, __LINE__, message); \
+        exit(1);                                                                  \
+    } while (0)
+
 // Function declarations
 // ---------------------
+void init_mode(int argc, char** argv);
+
 const char* shader_type_as_cstr(GLuint shader);
 char* slurp_file_into_malloced_cstr(const char* file_path);
 bool compile_shader_source(const GLchar* source, GLenum shader_type, GLuint* shader);
@@ -27,32 +36,38 @@ GLFWwindow* init_glfw_window();
 void init_glfw_callbacks(GLFWwindow* window);
 void init_gl_settings();
 void init_gl_uniforms(GLuint program);
+void init_shaders(GLuint* program);
 void update_gl_uniforms(int width, int height);
 
 void message_callback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* userParam);
 void window_resize_callback(GLFWwindow* window, int width, int height);
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
 
-void generate_voronoi_seeds(void);
+void generate_seeds();
 
-void render_frame(double delta_time, int width, int height);
+void render_voronoi_frame(double delta_time, int width, int height);
 void voronoi_loop(GLFWwindow* window);
+void bubbles_loop(GLFWwindow* window);
 
 // Constants
 // ---------------------
 // Window properties
 #define DEFAULT_SCREEN_WIDTH 1600
 #define DEFAULT_SCREEN_HEIGHT 900
-#define MANUAL_TIME_STEP 0.1
+#define MANUAL_TIME_STEP 0.01
 
-// Voronoi properties
+// Seed properties
 #define SEED_COUNT 20
-#define SEED_RADIUS 3
+#define SEED_RADIUS 5
+#define SEED_MAX_RADIUS 15
+#define SEED_MIN_RADIUS 3
 #define SEED_COLOR ((vec4){0.0f, 0.0f, 0.0f, 1.0f})
 
 // Shader paths
-#define VERTEX_FILE_PATH "shaders/quad.vert"
-#define FRAGMENT_FILE_PATH "shaders/color.frag"
+#define VORONOI_VERTEX_FILE_PATH "shaders/voronoi_quad.vert"
+#define VORONOI_FRAGMENT_FILE_PATH "shaders/voronoi.frag"
+#define BUBBLES_VERTEX_FILE_PATH "shaders/bubbles_quad.vert"
+#define BUBBLES_FRAGMENT_FILE_PATH "shaders/bubbles.frag"
 
 typedef struct {
     float x, y;
@@ -65,8 +80,14 @@ typedef struct {
 typedef enum {
     ATTRIB_POS = 0,
     ATTRIB_COLOR,
+    ATTRIB_RADIUS,
     COUNT_ATTRIBS,
 } Attrib;
+
+typedef enum {
+    MODE_VORONOI,
+    MODE_BUBBLES,
+} Mode;
 
 typedef enum {
     RESOLUTION_UNIFORM = 0,
@@ -84,38 +105,50 @@ static const char* uniform_names[COUNT_UNIFORMS] = {
 static vec2 seed_positions[SEED_COUNT];
 static vec2 seed_velocities[SEED_COUNT];
 static vec4 seed_colors[SEED_COUNT];
+static int seed_radii[SEED_COUNT];
 
 static bool pause = false;
-static double glfw_time = 0.0;
+static double global_delta_time = 0.0;
+static Mode mode = MODE_VORONOI;
+
 static GLuint vao;
 static GLuint vbos[COUNT_ATTRIBS];
 static GLint uniforms[COUNT_UNIFORMS];
 
 // Main function
 // ---------------------
-int main(void) {
+int main(int argc, char** argv) {
     srand(time(0));
+
+    init_mode(argc, argv);
+
     GLFWwindow* window;
     GLuint program;
 
-    generate_voronoi_seeds();
+    generate_seeds();
 
     init_glfw_settings();
-
-    glfw_time = glfwGetTime();
     window = init_glfw_window();
     load_gl_extensions();
     init_glfw_callbacks(window);
     init_gl_settings();
 
-    if (!load_shader_program(VERTEX_FILE_PATH, FRAGMENT_FILE_PATH, &program)) {
-        exit(1);
-    }
+    init_shaders(&program);
     glUseProgram(program);
     init_gl_uniforms(program);
 
     // RENDERING LOOP
-    voronoi_loop(window);
+    switch (mode) {
+        case MODE_VORONOI:
+            voronoi_loop(window);
+            break;
+        case MODE_BUBBLES:
+            voronoi_loop(window);
+            // bubbles_loop(window);
+            break;
+        default:
+            UNREACHABLE("Unexpected execution mode");
+    }
 
     glfwTerminate();
     return 0;
@@ -123,6 +156,19 @@ int main(void) {
 
 // Functions definitions
 // ---------------------
+void init_mode(int argc, char** argv) {
+    for (int i = 1; i < argc; ++i) {
+        if (strcmp(argv[i], "--bubbles") == 0) {
+            mode = MODE_BUBBLES;
+        } else {
+            fprintf(stderr, "ERROR: unknown flag `%s`\n", argv[i]);
+            exit(1);
+        }
+    }
+#if DEBUG
+    printf("Running in %s mode\n", mode == MODE_VORONOI ? "Voronoi" : "Bubbles");
+#endif
+}
 
 // Utility functions
 const char* shader_type_as_cstr(GLuint shader) {
@@ -255,8 +301,8 @@ float rand_float() {
     return (float)rand() / (float)RAND_MAX;
 }
 
-float lerpf(float a, float b, float t) {
-    return a + (b - a) * t;
+float lerpf(float start, float end, float t) {
+    return start + (end - start) * t;
 }
 
 // GLFW helpers
@@ -348,6 +394,45 @@ void init_gl_settings() {
                               (void*)0);
         glVertexAttribDivisor(ATTRIB_COLOR, 1);
     }
+
+	{
+		if (mode == MODE_BUBBLES) {
+			glGenBuffers(1, &vbos[ATTRIB_RADIUS]);
+			glBindBuffer(GL_ARRAY_BUFFER, vbos[ATTRIB_RADIUS]);
+			glBufferData(GL_ARRAY_BUFFER, sizeof(seed_radii), seed_radii, GL_STATIC_DRAW);
+
+			glEnableVertexAttribArray(ATTRIB_RADIUS);
+			glVertexAttribPointer(ATTRIB_RADIUS,
+								  1,
+								  GL_INT,
+								  GL_FALSE,
+								  0,
+								  (void*)0);
+			glVertexAttribDivisor(ATTRIB_RADIUS, 1);
+		}
+	}
+}
+
+void init_shaders(GLuint* program) {
+    const char* vertex_path;
+    const char* fragment_path;
+
+    switch (mode) {
+        case MODE_VORONOI:
+            fragment_path = VORONOI_FRAGMENT_FILE_PATH;
+			vertex_path = VORONOI_VERTEX_FILE_PATH;
+            break;
+        case MODE_BUBBLES:
+            fragment_path = BUBBLES_FRAGMENT_FILE_PATH;
+			vertex_path = BUBBLES_VERTEX_FILE_PATH;
+            break;
+        default:
+            UNREACHABLE("Unexpected execution mode");
+    }
+
+    if (!load_shader_program(vertex_path, fragment_path, program)) {
+        exit(1);
+    }
 }
 
 void init_gl_uniforms(GLuint program) {
@@ -397,16 +482,21 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 
         if (pause) {
             if (key == GLFW_KEY_LEFT) {
-                glfw_time -= MANUAL_TIME_STEP;
+                global_delta_time = -MANUAL_TIME_STEP;
             } else if (key == GLFW_KEY_RIGHT) {
-                glfw_time += MANUAL_TIME_STEP;
+                global_delta_time = MANUAL_TIME_STEP;
             }
         }
+    }
+
+    if (action == GLFW_RELEASE) {
+        global_delta_time = !(key == GLFW_KEY_LEFT && global_delta_time < 0.0f) * global_delta_time;
+        global_delta_time = !(key == GLFW_KEY_RIGHT && global_delta_time > 0.0f) * global_delta_time;
     }
 }
 
 // Voronoi helpers
-void generate_voronoi_seeds(void) {
+void generate_seeds() {
     for (size_t i = 0; i < SEED_COUNT; i++) {
         seed_positions[i].x = rand_float() * DEFAULT_SCREEN_WIDTH;
         seed_positions[i].y = rand_float() * DEFAULT_SCREEN_HEIGHT;
@@ -416,6 +506,10 @@ void generate_voronoi_seeds(void) {
         seed_colors[i].z = rand_float();
         seed_colors[i].w = 1.0f;
 
+        if (mode == MODE_BUBBLES) {
+            seed_radii[i] = rand_float() * (SEED_MAX_RADIUS - SEED_MIN_RADIUS) + SEED_MIN_RADIUS;
+        }
+
         float angle = rand_float() * 2.0f * M_PI;
         float mag = lerpf(100, 200, rand_float());
         seed_velocities[i].x = cosf(angle) * mag;
@@ -424,8 +518,8 @@ void generate_voronoi_seeds(void) {
 }
 
 // Rendering
-void render_frame(double delta_time, int width, int height) {
-    glClearColor(0.25f, 0.0f, 0.0f, 1.0f);
+void render_voronoi_frame(double delta_time, int width, int height) {
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     for (size_t i = 0; i < SEED_COUNT; ++i) {
@@ -445,6 +539,9 @@ void render_frame(double delta_time, int width, int height) {
     glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, SEED_COUNT);
 }
 
+void bubbles_loop(GLFWwindow* window) {
+}
+
 void voronoi_loop(GLFWwindow* window) {
     double prev_time = 0.0;
     double delta_time = 0.0;
@@ -454,13 +551,14 @@ void voronoi_loop(GLFWwindow* window) {
         glfwGetWindowSize(window, &width, &height);
         update_gl_uniforms(width, height);
 
-        render_frame(delta_time, width, height);
+        render_voronoi_frame(delta_time, width, height);
 
         glfwSwapBuffers(window);
         glfwPollEvents();
 
         double cur_time = glfwGetTime();
-        delta_time = !pause * (cur_time - prev_time);
+        delta_time = !pause ? cur_time - prev_time : global_delta_time;
+
         prev_time = cur_time;
     }
 }
