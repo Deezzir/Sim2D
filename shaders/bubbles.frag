@@ -24,4 +24,4 @@ void main(void) {
             out_color = seed_color;
         }
     }
-}
+} 

@@ -57,8 +57,8 @@ void bubbles_loop(GLFWwindow* window);
 #define MANUAL_TIME_STEP 0.01
 
 // Seed properties
-#define SEED_COUNT 20
-#define SEED_RADIUS 5
+#define SEED_COUNT 100
+#define SEED_RADIUS 0
 #define SEED_MAX_RADIUS 15
 #define SEED_MIN_RADIUS 3
 #define SEED_COLOR ((vec4){0.0f, 0.0f, 0.0f, 1.0f})
@@ -143,8 +143,8 @@ int main(int argc, char** argv) {
             voronoi_loop(window);
             break;
         case MODE_BUBBLES:
-            voronoi_loop(window);
-            // bubbles_loop(window);
+            // voronoi_loop(window);
+            bubbles_loop(window);
             break;
         default:
             UNREACHABLE("Unexpected execution mode");
@@ -442,7 +442,7 @@ void init_gl_uniforms(GLuint program) {
 
     glUniform2f(uniforms[RESOLUTION_UNIFORM], DEFAULT_SCREEN_WIDTH, DEFAULT_SCREEN_HEIGHT);
     glUniform4f(uniforms[SEED_COLOR_UNIFORM], SEED_COLOR.x, SEED_COLOR.y, SEED_COLOR.z, SEED_COLOR.w);
-    glUniform1i(uniforms[SEED_RADIUS_UNIFORM], SEED_RADIUS);
+    //glUniform1i(uniforms[SEED_RADIUS_UNIFORM], SEED_RADIUS);
 }
 
 void update_gl_uniforms(int width, int height) {
@@ -540,6 +540,24 @@ void render_voronoi_frame(double delta_time, int width, int height) {
 }
 
 void bubbles_loop(GLFWwindow* window) {
+    double prev_time = 0.0;
+    double delta_time = 0.0;
+
+    while (!glfwWindowShouldClose(window)) {
+        int width, height;
+        glfwGetWindowSize(window, &width, &height);
+        update_gl_uniforms(width, height);
+
+        render_voronoi_frame(delta_time, width, height);
+
+        glfwSwapBuffers(window);
+        glfwPollEvents();
+
+        double cur_time = glfwGetTime();
+        delta_time = !pause ? cur_time - prev_time : global_delta_time;
+
+        prev_time = cur_time;
+    }
 }
 
 void voronoi_loop(GLFWwindow* window) {
