@@ -6,11 +6,13 @@
 
 precision mediump float;
 
-layout(location = 0) in vec2 seed_pos;
-layout(location = 1) in vec4 seed_color;
+layout(location = 0) in vec2 seed_pos_in;
+layout(location = 1) in vec4 seed_color_in;
+layout(location = 2) in int seed_mark_rad_in;
 
-out vec2 seed;
-out vec4 color;
+out vec2 seed_pos;
+out vec4 seed_color;
+out flat int seed_mark_rad;
 
 void main(void)
 {
@@ -18,6 +20,8 @@ void main(void)
     uv.x = (gl_VertexID & 1);
     uv.y = ((gl_VertexID >> 1) & 1);
     gl_Position = vec4(uv * 2.0 - 1.0, 0.0, 1.0);
-    seed  = seed_pos;
-    color = seed_color;
+    
+    seed_pos  = seed_pos_in;
+    seed_color = seed_color_in;
+    seed_mark_rad = seed_mark_rad_in;
 }

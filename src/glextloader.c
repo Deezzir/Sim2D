@@ -22,6 +22,7 @@ static PFNGLBINDBUFFERPROC glBindBuffer = NULL;
 static PFNGLBUFFERDATAPROC glBufferData = NULL;
 static PFNGLENABLEVERTEXATTRIBARRAYPROC glEnableVertexAttribArray = NULL;
 static PFNGLVERTEXATTRIBPOINTERPROC glVertexAttribPointer = NULL;
+static PFNGLVERTEXATTRIBIPOINTERPROC glVertexAttribIPointer = NULL;
 static PFNGLVERTEXATTRIBDIVISORPROC glVertexAttribDivisor = NULL;
 static PFNGLUNIFORM1FPROC glUniform1f = NULL;
 static PFNGLBUFFERSUBDATAPROC glBufferSubData = NULL;
@@ -65,6 +66,7 @@ static void load_gl_extensions(void)
     glBufferData              = (PFNGLBUFFERDATAPROC) glfwGetProcAddress("glBufferData");
     glEnableVertexAttribArray = (PFNGLENABLEVERTEXATTRIBARRAYPROC) glfwGetProcAddress("glEnableVertexAttribArray");
     glVertexAttribPointer     = (PFNGLVERTEXATTRIBPOINTERPROC) glfwGetProcAddress("glVertexAttribPointer");
+    glVertexAttribIPointer     = (PFNGLVERTEXATTRIBIPOINTERPROC) glfwGetProcAddress("glVertexAttribIPointer");
     glVertexAttribDivisor     = (PFNGLVERTEXATTRIBDIVISORPROC) glfwGetProcAddress("glVertexAttribDivisor");
     glUniform1f               = (PFNGLUNIFORM1FPROC) glfwGetProcAddress("glUniform1f");
     glBufferSubData           = (PFNGLBUFFERSUBDATAPROC) glfwGetProcAddress("glBufferSubData");
