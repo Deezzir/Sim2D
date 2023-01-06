@@ -1,5 +1,5 @@
-#ifndef HELPERS_H
-#define HELPERS_H
+#ifndef _HELPERS_H
+#define _HELPERS_H
 
 typedef struct {
     float x, y;

@@ -1,8 +1,11 @@
-#ifndef SIM_H
-#define SIM_H
+#ifndef _MAIN_H
+#define _MAIN_H
+
+#include <stdbool.h>
 
 #define GLFW_INCLUDE_GLEXT
 #include <GLFW/glfw3.h>
+#include "glextloader.h"
 
 #include "helpers.h"
 
@@ -16,16 +19,20 @@
 // Constants
 // ---------------------
 // Window properties
-#define DEFAULT_SCREEN_WIDTH 800
-#define DEFAULT_SCREEN_HEIGHT 600
+#define DEFAULT_SCREEN_WIDTH 1920
+#define DEFAULT_SCREEN_HEIGHT 1080
 #define MANUAL_TIME_STEP 0.05
 
 // Seed properties
 #define SEED_COUNT 20
-#define SEED_MARK_RADIUS 5
+#define SEED_MARK_RADIUS 7
 #define BUBBLE_MAX_RADIUS 30
 #define BUBBLE_MIN_RADIUS 150
 #define SEED_MARK_COLOR ((vec4){0.0f, 0.0f, 0.0f, 1.0f})
+
+// Physics properties
+#define GRAVITY ((vec2){0.0f, -9.8f})
+#define SUB_STEPS 8
 
 // Shader paths
 #define VERTEX_FILE_PATH "shaders/quad.vert"
@@ -51,29 +58,29 @@ typedef enum {
     COUNT_UNIFORMS
 } Uniform;
 
-static const char* uniform_names[COUNT_UNIFORMS] = {
-    [RESOLUTION_UNIFORM] = "resolution",
-    [SEED_MARK_COLOR_UNIFORM] = "seed_mark_color",
-    [SEED_MARK_RADIUS_UNIFORM] = "seed_mark_radius",
-};
+extern const char* uniform_names[COUNT_UNIFORMS];
 
-static vec2 seed_positions[SEED_COUNT];
-static vec2 seed_velocities[SEED_COUNT];
-static vec4 seed_colors[SEED_COUNT];
-static GLint seed_mark_radii[SEED_COUNT];
+extern vec2 seed_positions[SEED_COUNT];
+extern vec2 seed_velocities[SEED_COUNT];
+extern vec4 seed_colors[SEED_COUNT];
+extern GLint seed_mark_radii[SEED_COUNT];
 
-static bool pause = false;
-static double global_delta_time = 0.0;
-static Mode mode = MODE_VORONOI;
+extern bool pause;
+extern Mode mode;
+extern double global_delta_time;
 
-static GLuint vao;
-static GLuint vbos[COUNT_ATTRIBS];
-static GLint uniforms[COUNT_UNIFORMS];
+extern GLint uniforms[COUNT_UNIFORMS];
+extern GLuint vbos[COUNT_ATTRIBS];
+
+extern void (*generate_seeds)(void);
+extern void (*render_frame)(double, int, int);
 
 // Function declarations
 // ---------------------
+void render_loop(GLFWwindow* window);
 void init_mode(int argc, char** argv);
 
+// OpenGL functions 
 const char* shader_type_as_cstr(GLuint shader);
 char* slurp_file_into_malloced_cstr(const char* file_path);
 bool compile_shader_source(const GLchar* source, GLenum shader_type, GLuint* shader);
@@ -93,10 +100,11 @@ void message_callback(GLenum source, GLenum type, GLuint id, GLenum severity, GL
 void window_resize_callback(GLFWwindow* window, int width, int height);
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
 
-void generate_seeds();
+// Sim functions
+void generate_bubbles_seeds();
+void generate_voronoi_seeds();
 
 void render_voronoi_frame(double delta_time, int width, int height);
-void voronoi_loop(GLFWwindow* window);
-void bubbles_loop(GLFWwindow* window);
+void render_bubbles_frame(double delta_time, int width, int height);
 
-#endif // SIM_H
+#endif  // MAIN_H

@@ -1,9 +1,9 @@
+#include "helpers.h"
+
+#include <assert.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <math.h>
-#include <assert.h>
-
-#include "helpers.h"
 
 float rand_float() {
     return (float)rand() / (float)RAND_MAX;

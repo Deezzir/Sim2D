@@ -1,17 +1,21 @@
 CC=gcc
-CFLAGS=-I -Wall -Wextra
+CFLAGS=-Wall -Wextra -Iinclude
 
 ifeq ($(DEBUG),1)
-    CFLAGS += -O0 -g -DDEBUG
+    CFLAGS+=-O0 -g -DDEBUG
 else
-    CFLAGS += -O2
+    CFLAGS+=-O2
 endif
 
 VORONOI_PPM_FILE=src/voronoi_ppm.c
-MAIN_OPENGL_FILE=src/sim.c
+
+MAIN_FILE=src/main.c
+SIM_FILE=src/sim.c
+GLEXTLOADER_FILE=src/glextloader.c
+OPENGL_FILE=src/opengl.c
 HELPERS_FILE=src/helpers.c
 
-sim: $(MAIN_OPENGL_FILE) $(HELPERS_FILE)
+sim: $(HELPERS_FILE) $(SIM_FILE) $(GLEXTLOADER_FILE) $(OPENGL_FILE) $(MAIN_FILE) 
 	$(CC) $(CFLAGS) $^ -o $@ -lglfw -lGL -lm
 
 voronoi: $(VORONOI_PPM_FILE)
