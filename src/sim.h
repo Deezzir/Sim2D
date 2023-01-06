@@ -16,13 +16,13 @@
 // Constants
 // ---------------------
 // Window properties
-#define DEFAULT_SCREEN_WIDTH 1600
-#define DEFAULT_SCREEN_HEIGHT 900
+#define DEFAULT_SCREEN_WIDTH 800
+#define DEFAULT_SCREEN_HEIGHT 600
 #define MANUAL_TIME_STEP 0.05
 
 // Seed properties
 #define SEED_COUNT 20
-#define SEED_MARK_RADIUS 10
+#define SEED_MARK_RADIUS 5
 #define BUBBLE_MAX_RADIUS 30
 #define BUBBLE_MIN_RADIUS 150
 #define SEED_MARK_COLOR ((vec4){0.0f, 0.0f, 0.0f, 1.0f})

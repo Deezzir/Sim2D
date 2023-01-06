@@ -7,6 +7,6 @@
 
 To compile the program, run `make` in the directory.
 
-## Example with 10 Seeds
+## Voronoi Sim Example with 20 Seeds
 
-![img](assets/output.png)
+![img](assets/voronoi.gif)
