@@ -1,8 +1,10 @@
-#ifndef MAIN_H
-#define MAIN_H
+#ifndef SIM_H
+#define SIM_H
 
 #define GLFW_INCLUDE_GLEXT
 #include <GLFW/glfw3.h>
+
+#include "helpers.h"
 
 // Macros
 #define UNREACHABLE(message)                                                      \
@@ -16,27 +18,19 @@
 // Window properties
 #define DEFAULT_SCREEN_WIDTH 1600
 #define DEFAULT_SCREEN_HEIGHT 900
-#define MANUAL_TIME_STEP 0.01
+#define MANUAL_TIME_STEP 0.05
 
 // Seed properties
 #define SEED_COUNT 20
-#define SEED_MARK_RADIUS 3
-#define SEED_MARK_MAX_RADIUS 10
-#define SEED_MARK_MIN_RADIUS 2
+#define SEED_MARK_RADIUS 10
+#define BUBBLE_MAX_RADIUS 30
+#define BUBBLE_MIN_RADIUS 150
 #define SEED_MARK_COLOR ((vec4){0.0f, 0.0f, 0.0f, 1.0f})
 
 // Shader paths
 #define VERTEX_FILE_PATH "shaders/quad.vert"
 #define VORONOI_FRAGMENT_FILE_PATH "shaders/voronoi.frag"
 #define BUBBLES_FRAGMENT_FILE_PATH "shaders/bubbles.frag"
-
-typedef struct {
-    float x, y;
-} vec2;
-
-typedef struct {
-    float x, y, z, w;
-} vec4;
 
 typedef enum {
     ATTRIB_POS = 0,
@@ -86,8 +80,6 @@ bool compile_shader_source(const GLchar* source, GLenum shader_type, GLuint* sha
 bool compile_shader_file(const char* file_path, GLenum shader_type, GLuint* shader);
 bool link_program(GLuint vert_shader, GLuint frag_shader, GLuint* program);
 bool load_shader_program(const char* vertex_file_path, const char* fragment_file_path, GLuint* program);
-float rand_float();
-float lerpf(float a, float b, float t);
 
 void init_glfw_settings();
 GLFWwindow* init_glfw_window();
@@ -107,4 +99,4 @@ void render_voronoi_frame(double delta_time, int width, int height);
 void voronoi_loop(GLFWwindow* window);
 void bubbles_loop(GLFWwindow* window);
 
-#endif // MAIN_H
+#endif // SIM_H

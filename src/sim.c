@@ -10,7 +10,8 @@
 #include <GLFW/glfw3.h>
 
 #include "glextloader.c"
-#include "main.h"
+#include "helpers.h"
+#include "sim.h"
 
 // Main function
 // ---------------------
@@ -191,14 +192,6 @@ bool load_shader_program(const char* vertex_file_path, const char* fragment_file
     }
 
     return true;
-}
-
-float rand_float() {
-    return (float)rand() / (float)RAND_MAX;
-}
-
-float lerpf(float start, float end, float t) {
-    return start + (end - start) * t;
 }
 
 // GLFW helpers
@@ -384,6 +377,8 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 
 // Voronoi helpers
 void generate_seeds() {
+    bool random_radius = mode == MODE_BUBBLES;
+
     for (size_t i = 0; i < SEED_COUNT; i++) {
         seed_positions[i].x = rand_float() * DEFAULT_SCREEN_WIDTH;
         seed_positions[i].y = rand_float() * DEFAULT_SCREEN_HEIGHT;
@@ -393,8 +388,8 @@ void generate_seeds() {
         seed_colors[i].z = rand_float();
         seed_colors[i].w = 1.0f;
 
-        seed_mark_radii[i] = mode == MODE_BUBBLES ? 
-            rand_float() * (SEED_MARK_MAX_RADIUS - SEED_MARK_MIN_RADIUS) + SEED_MARK_MIN_RADIUS : 
+        seed_mark_radii[i] = random_radius ? 
+            rand_float() * (BUBBLE_MAX_RADIUS - BUBBLE_MIN_RADIUS) + BUBBLE_MIN_RADIUS : 
             SEED_MARK_RADIUS
         ;
 
@@ -406,21 +401,64 @@ void generate_seeds() {
 }
 
 // Rendering
-void render_voronoi_frame(double delta_time, int width, int height) {
+void render_frame(double delta_time, int width, int height) {
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    for (size_t i = 0; i < SEED_COUNT; i++) {
+        vec2 pos1 = vec2_add(seed_positions[i], vec2_mul_scalar(seed_velocities[i], delta_time));
+        
+        // Bounce off other seeds
+        for (size_t j = 0; j < SEED_COUNT; j++) {
+            if (i == j) { continue; }
+
+            vec2 pos2 = seed_positions[j];
+            float dist = dist_vec2(pos1, pos2);
+
+            if (dist < (seed_mark_radii[i] + seed_mark_radii[j])) {
+                vec2 vel1 = seed_velocities[i];
+                vec2 vel2 = seed_velocities[j];
+
+                seed_velocities[i] = collision_sim(pos1, pos2, vel1, vel2, seed_mark_radii[i], seed_mark_radii[j]);
+                seed_velocities[j] = collision_sim(pos2, pos1, vel2, vel1, seed_mark_radii[j], seed_mark_radii[i]);
+
+                break;
+            }
+        }
+
+        // Bounce off walls
+        if ((pos1.x < 0.0f && seed_velocities[i].x < 0) || (pos1.x > width && seed_velocities[i].x > 0)) 
+        { 
+            seed_velocities[i] = vec2_mul(seed_velocities[i], (vec2){-1.0f, 1.0f}); 
+        }
+        if ((pos1.y < 0.0f && seed_velocities[i].y < 0) || (pos1.y > height && seed_velocities[i].y > 0)) 
+        { 
+            seed_velocities[i] = vec2_mul(seed_velocities[i], (vec2){1.0f, -1.0f});
+        }
+
+        seed_positions[i] = pos1;
+    }
+    glBindBuffer(GL_ARRAY_BUFFER, vbos[ATTRIB_POS]);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(seed_positions), seed_positions);
+    glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, SEED_COUNT);
+}
+
+void render_bubbles_frame(double delta_time, int width, int height) {
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     for (size_t i = 0; i < SEED_COUNT; ++i) {
-        float x = seed_positions[i].x + seed_velocities[i].x * delta_time;
-        float y = seed_positions[i].y + seed_velocities[i].y * delta_time;
-        if (x < 0.0f || x > width) {
-            seed_velocities[i].x *= -1.0f;
-        }
-        if (y < 0.0f || y > height) {
-            seed_velocities[i].y *= -1.0f;
-        }
-        seed_positions[i].y = y;
-        seed_positions[i].x = x;
+        float x1 = seed_positions[i].x + seed_velocities[i].x * delta_time;
+        float y1 = seed_positions[i].y + seed_velocities[i].y * delta_time;
+        
+        // Bounce off walls
+        if (x1 < 0.0f && seed_velocities[i].x < 0)   { seed_velocities[i].x *= -1.0f; }
+        if (x1 > width && seed_velocities[i].x > 0)  { seed_velocities[i].x *= -1.0f; }
+        if (y1 < 0.0f && seed_velocities[i].y < 0)   { seed_velocities[i].y *= -1.0f; }
+        if (y1 > height && seed_velocities[i].y > 0) { seed_velocities[i].y *= -1.0f; }
+
+        seed_positions[i].y = y1;
+        seed_positions[i].x = x1;
     }
     glBindBuffer(GL_ARRAY_BUFFER, vbos[ATTRIB_POS]);
     glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(seed_positions), seed_positions);
@@ -436,7 +474,7 @@ void bubbles_loop(GLFWwindow* window) {
         glfwGetWindowSize(window, &width, &height);
         update_gl_uniforms(width, height);
 
-        render_voronoi_frame(delta_time, width, height);
+        render_frame(delta_time, width, height);
 
         glfwSwapBuffers(window);
         glfwPollEvents();
@@ -457,7 +495,7 @@ void voronoi_loop(GLFWwindow* window) {
         glfwGetWindowSize(window, &width, &height);
         update_gl_uniforms(width, height);
 
-        render_voronoi_frame(delta_time, width, height);
+        render_frame(delta_time, width, height);
 
         glfwSwapBuffers(window);
         glfwPollEvents();
