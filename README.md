@@ -1,4 +1,4 @@
-# VoronoiDiagram
+# Sim2D
 
 - `src/voronoi_ppm.c` : The simple C program that will create a Voronoi Diagram image in PPM. Just a starting point.
 
