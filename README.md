@@ -7,6 +7,10 @@
 
 To compile the program, run `make` in the directory.
 
+Sources:
+
+- Elastic collision: https://en.wikipedia.org/wiki/Elastic_collision
+
 ## Voronoi Sim Example with 20 Seeds
 
 ![img](assets/voronoi.gif)

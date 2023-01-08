@@ -37,6 +37,7 @@
 // Shader paths
 #define VERTEX_FILE_PATH "shaders/quad.vert"
 #define VORONOI_FRAGMENT_FILE_PATH "shaders/voronoi.frag"
+#define BALLS_FRAGMENT_FILE_PATH "shaders/balls.frag"
 #define BUBBLES_FRAGMENT_FILE_PATH "shaders/bubbles.frag"
 
 typedef enum {
@@ -48,6 +49,7 @@ typedef enum {
 
 typedef enum {
     MODE_VORONOI,
+    MODE_BALLS,
     MODE_BUBBLES,
 } Mode;
 
@@ -67,13 +69,14 @@ extern GLint seed_mark_radii[SEED_COUNT];
 
 extern bool pause;
 extern Mode mode;
+extern bool drag_mode;
 extern double global_delta_time;
 
 extern GLint uniforms[COUNT_UNIFORMS];
 extern GLuint vbos[COUNT_ATTRIBS];
 
 extern void (*generate_seeds)(void);
-extern void (*render_frame)(double, int, int);
+extern void (*render_frame)(GLFWwindow*, double, int, int);
 
 // Function declarations
 // ---------------------
@@ -99,12 +102,13 @@ void update_gl_uniforms(int width, int height);
 void message_callback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* userParam);
 void window_resize_callback(GLFWwindow* window, int width, int height);
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
+void mouse_callback(GLFWwindow* window, int button, int action, int mods);
 
 // Sim functions
 void generate_bubbles_seeds();
 void generate_voronoi_seeds();
 
-void render_voronoi_frame(double delta_time, int width, int height);
-void render_bubbles_frame(double delta_time, int width, int height);
+void render_voronoi_frame(GLFWwindow* window, double delta_time, int width, int height);
+void render_bubbles_frame(GLFWwindow* window, double delta_time, int width, int height);
 
 #endif  // MAIN_H

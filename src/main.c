@@ -13,11 +13,12 @@
 #include "main.h"
 
 bool pause = false;
+bool drag_mode = false;
 Mode mode = MODE_VORONOI;
 double global_delta_time = 0.0;
 
 void (*generate_seeds)(void) = NULL;
-void (*render_frame)(double, int, int) = NULL;
+void (*render_frame)(GLFWwindow*, double, int, int) = NULL;
 
 // Main function
 int main(int argc, char** argv) {
@@ -53,14 +54,21 @@ void render_loop(GLFWwindow* window) {
     double prev_time = 0.0;
     double delta_time = 0.0;
 
+    int prev_width = DEFAULT_SCREEN_WIDTH; 
+    int prev_height = DEFAULT_SCREEN_HEIGHT;
+    int width, height;
+
     while (!glfwWindowShouldClose(window)) {
-        int width, height;
         glfwGetWindowSize(window, &width, &height);
-        update_gl_uniforms(width, height);
+        if (width != prev_width || height != prev_height) {
+            prev_width = width;
+            prev_height = height;
+            update_gl_uniforms(width, height);
+        }
 
         float sub_dt = delta_time / SUB_STEPS;
         for (size_t i = 0; i < SUB_STEPS; ++i) {
-            render_frame(sub_dt, width, height);
+            render_frame(window, sub_dt, width, height);
             glfwSwapBuffers(window);
         }
 
@@ -76,6 +84,10 @@ void init_mode(int argc, char** argv) {
     for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "--bubbles") == 0) {
             mode = MODE_BUBBLES;
+        } else if (strcmp(argv[i], "--balls") == 0) {
+            mode = MODE_BALLS;
+        } else if (strcmp(argv[i], "--voronoi") == 0) {
+            mode = MODE_VORONOI;
         } else {
             fprintf(stderr, "ERROR: unknown flag `%s`\n", argv[i]);
             exit(1);
@@ -84,6 +96,7 @@ void init_mode(int argc, char** argv) {
 
     switch (mode) {
         case MODE_VORONOI:
+        case MODE_BALLS:
             generate_seeds = generate_voronoi_seeds;
             render_frame = render_voronoi_frame;
             break;

@@ -192,6 +192,7 @@ void init_glfw_callbacks(GLFWwindow* window) {
     }
 #endif
     glfwSetKeyCallback(window, key_callback);
+    glfwSetMouseButtonCallback(window, mouse_callback);
     glfwSetFramebufferSizeCallback(window, window_resize_callback);
 }
 
@@ -256,6 +257,9 @@ void init_shaders(GLuint* program) {
         case MODE_VORONOI:
             fragment_path = VORONOI_FRAGMENT_FILE_PATH;
             break;
+        case MODE_BALLS:
+            fragment_path = BALLS_FRAGMENT_FILE_PATH;
+            break;
         case MODE_BUBBLES:
             fragment_path = BUBBLES_FRAGMENT_FILE_PATH;
             break;
@@ -301,9 +305,12 @@ void window_resize_callback(GLFWwindow* window, int width, int height) {
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
     (void)scancode;
-    (void)action;
     (void)mods;
     (void)window;
+
+    if (key == GLFW_MOUSE_BUTTON_LEFT) {
+        printf("Mouse LEFT pressed");
+    }
 
     if (action == GLFW_PRESS) {
         if (key == GLFW_KEY_SPACE) {
@@ -324,5 +331,22 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
     if (action == GLFW_RELEASE) {
         global_delta_time = !(key == GLFW_KEY_LEFT && global_delta_time < 0.0f) * global_delta_time;
         global_delta_time = !(key == GLFW_KEY_RIGHT && global_delta_time > 0.0f) * global_delta_time;
+    }
+}
+
+void mouse_callback(GLFWwindow* window, int button, int action, int mods) {
+    (void)mods;
+    (void)window;
+
+    if (action == GLFW_PRESS) {
+        if (button == GLFW_MOUSE_BUTTON_LEFT) {
+            drag_mode = true;
+        }
+    }
+
+    if (action == GLFW_RELEASE) {
+        if (button == GLFW_MOUSE_BUTTON_LEFT) {
+            drag_mode = false;
+        }
     }
 }
