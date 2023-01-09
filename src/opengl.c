@@ -1,5 +1,3 @@
-#include "main.h"
-
 #include <assert.h>
 #include <errno.h>
 #include <stdbool.h>
@@ -8,18 +6,168 @@
 #include <string.h>
 #include <time.h>
 
+#include "main.h"
 
+// This source inner helpers
+const char* _shader_type_as_cstr(GLuint shader);
+char* _slurp_file_into_malloced_cstr(const char* file_path);
+bool _compile_shader_source(const GLchar* source, GLenum shader_type, GLuint* shader);
+bool _compile_shader_file(const char* file_path, GLenum shader_type, GLuint* shader);
+bool _link_program(GLuint vert_shader, GLuint frag_shader, GLuint* program);
+bool _load_shader_program(const char* vertex_file_path, const char* fragment_file_path, GLuint* program);
+
+void _message_callback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* userParam);
+void _window_resize_callback(GLFWwindow* window, int width, int height);
+void _key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
+void _mouse_callback(GLFWwindow* window, int button, int action, int mods);
+
+static_assert(COUNT_UNIFORMS == 1, "Update list of uniform names");
 const char* uniform_names[COUNT_UNIFORMS] = {
     [RESOLUTION_UNIFORM] = "resolution",
-    [SEED_MARK_COLOR_UNIFORM] = "seed_mark_color",
-    [SEED_MARK_RADIUS_UNIFORM] = "seed_mark_radius",
+};
+
+static_assert(COUNT_VERTICES == 1, "Update list of vertex file paths");
+const char* vertex_files[COUNT_VERTICES] = {
+    [GENERAL_VERTEX] =  VERTEX_FILE_PATH,
+};
+
+static_assert(COUNT_FRAGMENTS == 3, "Update list of fragment file paths");
+const char* fragment_files[COUNT_FRAGMENTS] = {
+    [VORONOI_FRAGMENT] = VORONOI_FRAGMENT_FILE_PATH,
+    [ATOMS_FRAGMENT] = ATOMS_FRAGMENT_FILE_PATH,
+    [BUBBLES_FRAGMENT] = BUBBLES_FRAGMENT_FILE_PATH,
 };
 
 GLuint vbos[COUNT_ATTRIBS];
 GLint uniforms[COUNT_UNIFORMS];
 
-// Utility functions
-const char* shader_type_as_cstr(GLuint shader) {
+// Function definitions
+// ---------------------
+void init_gl_uniforms(GLuint program) {
+    for (Uniform i = 0; i < COUNT_UNIFORMS; i++) {
+        uniforms[i] = glGetUniformLocation(program, uniform_names[i]);
+    }
+
+    glUniform2f(uniforms[RESOLUTION_UNIFORM], DEFAULT_SCREEN_WIDTH, DEFAULT_SCREEN_HEIGHT);
+}
+
+void update_gl_uniforms(int width, int height) {
+    glUniform2f(uniforms[RESOLUTION_UNIFORM], width, height);
+}
+
+void init_glfw_settings(void) {
+    if (!glfwInit()) {
+        fprintf(stderr, "[ERROR]: Could not initialize GLFW\n");
+        exit(1);
+    }
+
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
+}
+
+GLFWwindow* init_glfw_window() {
+    GLFWwindow* window = glfwCreateWindow(
+        DEFAULT_SCREEN_WIDTH,
+        DEFAULT_SCREEN_HEIGHT,
+        "Sim2D",
+        NULL,
+        NULL);
+
+    if (window == NULL) {
+        fprintf(stderr, "[ERROR]; Could not create a window\n");
+        glfwTerminate();
+        exit(1);
+    }
+
+    int gl_ver_major = glfwGetWindowAttrib(window, GLFW_CONTEXT_VERSION_MAJOR);
+    int gl_ver_minor = glfwGetWindowAttrib(window, GLFW_CONTEXT_VERSION_MINOR);
+    
+    printf("OpenGL %d.%d\n", gl_ver_major, gl_ver_minor);
+    printf("GLFW %s\n", glfwGetVersionString());
+
+    glfwMakeContextCurrent(window);
+    glfwSwapInterval(1);
+
+    return window;
+}
+
+void init_glfw_callbacks(GLFWwindow* window) {
+#ifdef DEBUG
+    if (glDebugMessageCallback != NULL && glDebugMessageControl != NULL) {
+        glEnable(GL_DEBUG_OUTPUT);
+        glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+        glDebugMessageCallback(_message_callback, 0);
+        glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, NULL, GL_TRUE);
+    }
+#endif
+    glfwSetKeyCallback(window, _key_callback);
+    glfwSetMouseButtonCallback(window, _mouse_callback);
+    glfwSetFramebufferSizeCallback(window, _window_resize_callback);
+}
+
+void init_gl_settings() {
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    GLuint vao;
+    glGenVertexArrays(1, &vao);
+    glBindVertexArray(vao);
+
+    glGenBuffers(COUNT_ATTRIBS, vbos);
+    {
+        glGenBuffers(1, &vbos[ATTRIB_POS]);
+        glBindBuffer(GL_ARRAY_BUFFER, vbos[ATTRIB_POS]);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(vec2) * SEED_COUNT, seed_positions, GL_STATIC_DRAW);
+
+        glEnableVertexAttribArray(ATTRIB_POS);
+        glVertexAttribPointer(ATTRIB_POS,
+                              2,
+                              GL_FLOAT,
+                              GL_FALSE,
+                              0,
+                              (void*)0);
+        glVertexAttribDivisor(ATTRIB_POS, 1);
+    }
+    {
+        glGenBuffers(1, &vbos[ATTRIB_COLOR]);
+        glBindBuffer(GL_ARRAY_BUFFER, vbos[ATTRIB_COLOR]);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(vec4) * SEED_COUNT, seed_colors, GL_STATIC_DRAW);
+
+        glEnableVertexAttribArray(ATTRIB_COLOR);
+        glVertexAttribPointer(ATTRIB_COLOR,
+                              4,
+                              GL_FLOAT,
+                              GL_FALSE,
+                              0,
+                              (void*)0);
+        glVertexAttribDivisor(ATTRIB_COLOR, 1);
+    }
+    {
+        glGenBuffers(1, &vbos[ATTRIB_RADIUS]);
+        glBindBuffer(GL_ARRAY_BUFFER, vbos[ATTRIB_RADIUS]);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(GLint) * SEED_COUNT, seed_mark_radii, GL_STATIC_DRAW);
+
+        glEnableVertexAttribArray(ATTRIB_RADIUS);
+        glVertexAttribIPointer(ATTRIB_RADIUS,
+                               1,
+                               GL_INT,
+                               0,
+                               (void*)0);
+        glVertexAttribDivisor(ATTRIB_RADIUS, 1);
+    }
+}
+
+void init_shaders(GLuint* program, const char* vert_file_path, const char* frag_file_path) {
+    if (!_load_shader_program(vert_file_path, frag_file_path, program)) {
+        exit(1);
+    }
+}
+
+// Private function definitions
+// ---------------------
+const char* _shader_type_as_cstr(GLuint shader) {
     switch (shader) {
         case GL_VERTEX_SHADER:
             return "GL_VERTEX_SHADER";
@@ -30,7 +178,7 @@ const char* shader_type_as_cstr(GLuint shader) {
     }
 }
 
-char* slurp_file_into_malloced_cstr(const char* file_path) {
+char* _slurp_file_into_malloced_cstr(const char* file_path) {
     FILE* f = NULL;
     char* buffer = NULL;
 
@@ -68,7 +216,7 @@ fail:
     return NULL;
 }
 
-bool compile_shader_source(const GLchar* source, GLenum shader_type, GLuint* shader) {
+bool _compile_shader_source(const GLchar* source, GLenum shader_type, GLuint* shader) {
     *shader = glCreateShader(shader_type);
     glShaderSource(*shader, 1, &source, NULL);
     glCompileShader(*shader);
@@ -81,7 +229,7 @@ bool compile_shader_source(const GLchar* source, GLenum shader_type, GLuint* sha
         GLsizei message_size = 0;
         glGetShaderInfoLog(*shader, sizeof(message), &message_size, message);
 
-        fprintf(stderr, "[ERROR]: Could not compile %s\n", shader_type_as_cstr(shader_type));
+        fprintf(stderr, "[ERROR]: Could not compile %s\n", _shader_type_as_cstr(shader_type));
         fprintf(stderr, "%.*s\n", message_size, message);
         return false;
     }
@@ -89,14 +237,14 @@ bool compile_shader_source(const GLchar* source, GLenum shader_type, GLuint* sha
     return true;
 }
 
-bool compile_shader_file(const char* file_path, GLenum shader_type, GLuint* shader) {
-    char* source = slurp_file_into_malloced_cstr(file_path);
+bool _compile_shader_file(const char* file_path, GLenum shader_type, GLuint* shader) {
+    char* source = _slurp_file_into_malloced_cstr(file_path);
     if (source == NULL) {
         fprintf(stderr, "[ERROR]: Failed to read file file `%s`: %s\n", file_path, strerror(errno));
         errno = 0;
         return false;
     }
-    bool ok = compile_shader_source(source, shader_type, shader);
+    bool ok = _compile_shader_source(source, shader_type, shader);
     if (!ok) {
         fprintf(stderr, "[ERROR]: Failed to compile `%s` shader file\n", file_path);
     }
@@ -104,7 +252,7 @@ bool compile_shader_file(const char* file_path, GLenum shader_type, GLuint* shad
     return ok;
 }
 
-bool link_program(GLuint vert_shader, GLuint frag_shader, GLuint* program) {
+bool _link_program(GLuint vert_shader, GLuint frag_shader, GLuint* program) {
     *program = glCreateProgram();
 
     glAttachShader(*program, vert_shader);
@@ -127,166 +275,26 @@ bool link_program(GLuint vert_shader, GLuint frag_shader, GLuint* program) {
     return program;
 }
 
-bool load_shader_program(const char* vertex_file_path, const char* fragment_file_path, GLuint* program) {
+bool _load_shader_program(const char* vertex_file_path, const char* fragment_file_path, GLuint* program) {
     GLuint vert = 0;
-    if (!compile_shader_file(vertex_file_path, GL_VERTEX_SHADER, &vert)) {
+    if (!_compile_shader_file(vertex_file_path, GL_VERTEX_SHADER, &vert)) {
         return false;
     }
 
     GLuint frag = 0;
-    if (!compile_shader_file(fragment_file_path, GL_FRAGMENT_SHADER, &frag)) {
+    if (!_compile_shader_file(fragment_file_path, GL_FRAGMENT_SHADER, &frag)) {
         return false;
     }
 
-    if (!link_program(vert, frag, program)) {
+    if (!_link_program(vert, frag, program)) {
         return false;
     }
 
     return true;
 }
 
-// GLFW helpers
-void init_glfw_settings(void) {
-    // Initialize GLFW
-    if (!glfwInit()) {
-        fprintf(stderr, "[ERROR]: Could not initialize GLFW\n");
-        exit(1);
-    }
-
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
-}
-
-GLFWwindow* init_glfw_window() {
-    GLFWwindow* window = glfwCreateWindow(
-        DEFAULT_SCREEN_WIDTH,
-        DEFAULT_SCREEN_HEIGHT,
-        "Voronoi",
-        NULL,
-        NULL);
-
-    if (window == NULL) {
-        fprintf(stderr, "[ERROR]; Could not create a window\n");
-        glfwTerminate();
-        exit(1);
-    }
-
-    int gl_ver_major = glfwGetWindowAttrib(window, GLFW_CONTEXT_VERSION_MAJOR);
-    int gl_ver_minor = glfwGetWindowAttrib(window, GLFW_CONTEXT_VERSION_MINOR);
-    printf("OpenGL %d.%d\n", gl_ver_major, gl_ver_minor);
-
-    glfwMakeContextCurrent(window);
-    glfwSwapInterval(1);
-
-    return window;
-}
-
-void init_glfw_callbacks(GLFWwindow* window) {
-#ifdef DEBUG
-    if (glDebugMessageCallback != NULL && glDebugMessageControl != NULL) {
-        glEnable(GL_DEBUG_OUTPUT);
-        glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
-        glDebugMessageCallback(message_callback, 0);
-        glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, NULL, GL_TRUE);
-    }
-#endif
-    glfwSetKeyCallback(window, key_callback);
-    glfwSetMouseButtonCallback(window, mouse_callback);
-    glfwSetFramebufferSizeCallback(window, window_resize_callback);
-}
-
-void init_gl_settings() {
-    glEnable(GL_DEPTH_TEST);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    GLuint vao;
-    glGenVertexArrays(1, &vao);
-    glBindVertexArray(vao);
-
-    glGenBuffers(COUNT_ATTRIBS, vbos);
-    {
-        glGenBuffers(1, &vbos[ATTRIB_POS]);
-        glBindBuffer(GL_ARRAY_BUFFER, vbos[ATTRIB_POS]);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(seed_positions), seed_positions, GL_STATIC_DRAW);
-
-        glEnableVertexAttribArray(ATTRIB_POS);
-        glVertexAttribPointer(ATTRIB_POS,
-                              2,
-                              GL_FLOAT,
-                              GL_FALSE,
-                              0,
-                              (void*)0);
-        glVertexAttribDivisor(ATTRIB_POS, 1);
-    }
-    {
-        glGenBuffers(1, &vbos[ATTRIB_COLOR]);
-        glBindBuffer(GL_ARRAY_BUFFER, vbos[ATTRIB_COLOR]);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(seed_colors), seed_colors, GL_STATIC_DRAW);
-
-        glEnableVertexAttribArray(ATTRIB_COLOR);
-        glVertexAttribPointer(ATTRIB_COLOR,
-                              4,
-                              GL_FLOAT,
-                              GL_FALSE,
-                              0,
-                              (void*)0);
-        glVertexAttribDivisor(ATTRIB_COLOR, 1);
-    }
-    {
-        glGenBuffers(1, &vbos[ATTRIB_RADIUS]);
-        glBindBuffer(GL_ARRAY_BUFFER, vbos[ATTRIB_RADIUS]);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(seed_mark_radii), seed_mark_radii, GL_STATIC_DRAW);
-
-        glEnableVertexAttribArray(ATTRIB_RADIUS);
-        glVertexAttribIPointer(ATTRIB_RADIUS,
-                               1,
-                               GL_INT,
-                               0,
-                               (void*)0);
-        glVertexAttribDivisor(ATTRIB_RADIUS, 1);
-    }
-}
-
-void init_shaders(GLuint* program) {
-    const char* vertex_path = VERTEX_FILE_PATH;
-    const char* fragment_path;
-
-    switch (mode) {
-        case MODE_VORONOI:
-            fragment_path = VORONOI_FRAGMENT_FILE_PATH;
-            break;
-        case MODE_BALLS:
-            fragment_path = BALLS_FRAGMENT_FILE_PATH;
-            break;
-        case MODE_BUBBLES:
-            fragment_path = BUBBLES_FRAGMENT_FILE_PATH;
-            break;
-        default:
-            UNREACHABLE("Unexpected execution mode");
-    }
-
-    if (!load_shader_program(vertex_path, fragment_path, program)) {
-        exit(1);
-    }
-}
-
-void init_gl_uniforms(GLuint program) {
-    for (Uniform i = 0; i < COUNT_UNIFORMS; i++) {
-        uniforms[i] = glGetUniformLocation(program, uniform_names[i]);
-    }
-
-    glUniform2f(uniforms[RESOLUTION_UNIFORM], DEFAULT_SCREEN_WIDTH, DEFAULT_SCREEN_HEIGHT);
-    glUniform4f(uniforms[SEED_MARK_COLOR_UNIFORM], SEED_MARK_COLOR.x, SEED_MARK_COLOR.y, SEED_MARK_COLOR.z, SEED_MARK_COLOR.w);
-}
-
-void update_gl_uniforms(int width, int height) {
-    glUniform2f(uniforms[RESOLUTION_UNIFORM], width, height);
-}
-
 // Callbacks
-void message_callback(GLenum source, GLenum type, GLuint id, GLenum severity,
+void _message_callback(GLenum source, GLenum type, GLuint id, GLenum severity,
                       GLsizei length, const GLchar* message, const void* userParam) {
     (void)source;
     (void)id;
@@ -298,55 +306,47 @@ void message_callback(GLenum source, GLenum type, GLuint id, GLenum severity,
             source, type, severity, message);
 }
 
-void window_resize_callback(GLFWwindow* window, int width, int height) {
+void _window_resize_callback(GLFWwindow* window, int width, int height) {
     (void)window;
     glViewport(0, 0, width, height);
 }
 
-void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+void _key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
     (void)scancode;
     (void)mods;
     (void)window;
 
-    if (key == GLFW_MOUSE_BUTTON_LEFT) {
-        printf("Mouse LEFT pressed");
-    }
-
     if (action == GLFW_PRESS) {
         if (key == GLFW_KEY_SPACE) {
-            pause = !pause;
+            IS_PAUSE = !IS_PAUSE;
         } else if (key == GLFW_KEY_Q) {
-            exit(1);
+            IS_RUNNING = false;
         }
 
-        if (pause) {
+        if (IS_PAUSE) {
             if (key == GLFW_KEY_LEFT) {
-                global_delta_time = -MANUAL_TIME_STEP;
+                DELTA_TIME = -MANUAL_TIME_STEP;
             } else if (key == GLFW_KEY_RIGHT) {
-                global_delta_time = MANUAL_TIME_STEP;
+                DELTA_TIME = MANUAL_TIME_STEP;
             }
         }
     }
 
     if (action == GLFW_RELEASE) {
-        global_delta_time = !(key == GLFW_KEY_LEFT && global_delta_time < 0.0f) * global_delta_time;
-        global_delta_time = !(key == GLFW_KEY_RIGHT && global_delta_time > 0.0f) * global_delta_time;
+        DELTA_TIME = !(key == GLFW_KEY_LEFT && DELTA_TIME < 0.0f) * DELTA_TIME;
+        DELTA_TIME = !(key == GLFW_KEY_RIGHT && DELTA_TIME > 0.0f) * DELTA_TIME;
     }
 }
 
-void mouse_callback(GLFWwindow* window, int button, int action, int mods) {
+void _mouse_callback(GLFWwindow* window, int button, int action, int mods) {
     (void)mods;
     (void)window;
 
-    if (action == GLFW_PRESS) {
-        if (button == GLFW_MOUSE_BUTTON_LEFT) {
-            drag_mode = true;
-        }
+    if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT) {
+        IS_DRAG_MODE = true;
     }
 
-    if (action == GLFW_RELEASE) {
-        if (button == GLFW_MOUSE_BUTTON_LEFT) {
-            drag_mode = false;
-        }
+    if (action == GLFW_RELEASE && button == GLFW_MOUSE_BUTTON_LEFT) {
+        IS_DRAG_MODE = false;
     }
 }

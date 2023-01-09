@@ -2,8 +2,9 @@
 
 precision mediump float;
 
+#define SEED_MARK_COLOR vec4(0, 0, 0, 1)
+
 uniform vec2 resolution;
-uniform vec4 seed_mark_color;
 
 in vec2 seed_pos;
 in vec4 seed_color;
@@ -19,5 +20,5 @@ void main(void) {
 
     int c = int(length(gl_FragCoord.xy - seed_pos) >= seed_mark_rad);
     gl_FragDepth = c * pow(abs(dx*dx*dx) + abs (dy*dy*dy), 1.0/3.0) / pow(abs(rx*rx*rx) + abs(ry*ry*ry), 1.0/3.0);
-    out_color = c * seed_color + (1 - c) * seed_mark_color;
+    out_color = c * seed_color + (1 - c) * SEED_MARK_COLOR;
 }

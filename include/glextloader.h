@@ -42,6 +42,6 @@ extern PFNGLUNIFORM4FPROC glUniform4f;
 // Let's try to ship our own gl.h just like glext.h
 #ifdef _WIN32
 static PFNGLACTIVETEXTUREPROC glActiveTexture;
-#endif // _WIN32
+#endif  // _WIN32
 
 void load_gl_extensions(void);

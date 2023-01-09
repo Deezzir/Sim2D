@@ -2,17 +2,16 @@
 
 precision mediump float;
 
+#define BACKGROUND_COLOR vec4(0.1, 0.1, 0.1, 1)
+#define SEED_COLOR vec4(0.9, 0.9, 0.9, 1)
+
 uniform vec2 resolution;
-uniform vec4 seed_mark_color;
 
 in vec2 seed_pos;
 in vec4 seed_color;
 flat in int seed_mark_rad;
 
 out vec4 out_color;
-
-#define BACKGROUND_COLOR vec4(0.1, 0.1, 0.1, 1)
-#define SEED_COLOR vec4(0.9, 0.9, 0.9, 1)
 
 void main(void) {
     if (length(gl_FragCoord.xy - seed_pos) < seed_mark_rad) {

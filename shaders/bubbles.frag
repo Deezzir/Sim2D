@@ -3,7 +3,6 @@
 precision mediump float;
 
 uniform vec2 resolution;
-uniform vec4 seed_mark_color;
 
 in vec2 seed_pos;
 flat in int seed_mark_rad;

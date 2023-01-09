@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <errno.h>
+#include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,24 +13,26 @@
 #include "helpers.h"
 #include "main.h"
 
-bool pause = false;
-bool drag_mode = false;
-Mode mode = MODE_VORONOI;
-double global_delta_time = 0.0;
+Mode SIM_MODE = MODE_VORONOI;
+double DELTA_TIME = 0.0;
 
-void (*generate_seeds)(void) = NULL;
+bool IS_PAUSE = false;
+bool IS_DRAG_MODE = false;
+bool IS_RUNNING = false;
+
 void (*render_frame)(GLFWwindow*, double, int, int) = NULL;
 
 // Main function
 int main(int argc, char** argv) {
     srand(time(0));
 
-    init_mode(argc, argv);
+    get_arguments(argc, argv);
+    init_signal_handler();
+
+    init_sim_mode(SIM_MODE);
 
     GLFWwindow* window;
     GLuint program;
-
-    generate_seeds();
 
     init_glfw_settings();
     window = init_glfw_window();
@@ -37,7 +40,10 @@ int main(int argc, char** argv) {
     init_glfw_callbacks(window);
     init_gl_settings();
 
-    init_shaders(&program);
+    init_shaders(&program,
+                 vertex_files[GENERAL_VERTEX],
+                 fragment_files[SIM_MODE]);
+
     glUseProgram(program);
     init_gl_uniforms(program);
 
@@ -45,20 +51,23 @@ int main(int argc, char** argv) {
     render_loop(window);
     // ---------------------
 
+    free_sim_mode();
     glfwTerminate();
     return 0;
 }
 
 // Main loop
 void render_loop(GLFWwindow* window) {
-    double prev_time = 0.0;
-    double delta_time = 0.0;
+    IS_RUNNING = true;
 
-    int prev_width = DEFAULT_SCREEN_WIDTH; 
+    double prev_time = 0.0;
+    double dt = 0.0;
+
+    int prev_width = DEFAULT_SCREEN_WIDTH;
     int prev_height = DEFAULT_SCREEN_HEIGHT;
     int width, height;
 
-    while (!glfwWindowShouldClose(window)) {
+    while (!glfwWindowShouldClose(window) && IS_RUNNING) {
         glfwGetWindowSize(window, &width, &height);
         if (width != prev_width || height != prev_height) {
             prev_width = width;
@@ -66,52 +75,15 @@ void render_loop(GLFWwindow* window) {
             update_gl_uniforms(width, height);
         }
 
-        float sub_dt = delta_time / SUB_STEPS;
+        float sub_dt = dt / SUB_STEPS;
         for (size_t i = 0; i < SUB_STEPS; ++i) {
             render_frame(window, sub_dt, width, height);
             glfwSwapBuffers(window);
+            glfwPollEvents();
         }
-
-        glfwPollEvents();
 
         double cur_time = glfwGetTime();
-        delta_time = !pause ? cur_time - prev_time : global_delta_time;
+        dt = !IS_PAUSE ? cur_time - prev_time : DELTA_TIME;
         prev_time = cur_time;
     }
-}
-
-void init_mode(int argc, char** argv) {
-    for (int i = 1; i < argc; ++i) {
-        if (strcmp(argv[i], "--bubbles") == 0) {
-            mode = MODE_BUBBLES;
-        } else if (strcmp(argv[i], "--balls") == 0) {
-            mode = MODE_BALLS;
-        } else if (strcmp(argv[i], "--voronoi") == 0) {
-            mode = MODE_VORONOI;
-        } else {
-            fprintf(stderr, "ERROR: unknown flag `%s`\n", argv[i]);
-            exit(1);
-        }
-    }
-
-    switch (mode) {
-        case MODE_VORONOI:
-        case MODE_BALLS:
-            generate_seeds = generate_voronoi_seeds;
-            render_frame = render_voronoi_frame;
-            break;
-        case MODE_BUBBLES:
-            generate_seeds = generate_bubbles_seeds;
-            render_frame = render_bubbles_frame;
-            break;
-        default:
-            UNREACHABLE("Unexpected execution mode");
-    }
-
-    assert(generate_seeds != NULL || "generate_seeds is NULL");
-    assert(render_frame != NULL || "render_frame is NULL");
-
-#if DEBUG
-    printf("Running in %s mode\n", mode == MODE_VORONOI ? "Voronoi" : "Bubbles");
-#endif
 }

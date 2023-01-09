@@ -81,18 +81,22 @@ void load_gl_extensions(void) {
 #endif  // _WIN32
 
     if (glfwExtensionSupported("GL_ARB_debug_output")) {
-        fprintf(stderr, "INFO: ARB_debug_output is supported\n");
+#if DEBUG
+        fprintf(stderr, "[INFO]: ARB_debug_output is supported\n");
+#endif
         glDebugMessageCallback = (PFNGLDEBUGMESSAGECALLBACKPROC)glfwGetProcAddress("glDebugMessageCallback");
         glDebugMessageControl = (PFNGLDEBUGMESSAGECONTROLPROC)glfwGetProcAddress("glDebugMessageControl");
     } else {
-        fprintf(stderr, "WARN: ARB_debug_output is NOT supported\n");
+        fprintf(stderr, "[WARN]: ARB_debug_output is NOT supported\n");
     }
 
     if (glfwExtensionSupported("GL_EXT_draw_instanced")) {
-        fprintf(stderr, "INFO: EXT_draw_instanced is supported\n");
+#if DEBUG
+        fprintf(stderr, "[INFO]: EXT_draw_instanced is supported\n");
+#endif
         glDrawArraysInstanced = (PFNGLDRAWARRAYSINSTANCEDPROC)glfwGetProcAddress("glDrawArraysInstanced");
     } else {
-        fprintf(stderr, "ERR: EXT_draw_instanced is NOT supported\n");
+        fprintf(stderr, "[ERROR]: EXT_draw_instanced is NOT supported\n");
         exit(1);
     }
 }
