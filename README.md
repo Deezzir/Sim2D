@@ -14,7 +14,7 @@ $ make all
 gcc -Wall -Wextra -Iinclude -O2 src/voronoi_ppm.c -o voronoi 
 gcc -Wall -Wextra -Iinclude -O2 src/helpers.c src/sim.c src/glextloader.c src/opengl.c src/main.c -o sim -lglfw -lGL -lm
 
-./voronoi & ./sim 
+$ ./voronoi & ./sim 
 ```
 
 ### Optional Arguments
