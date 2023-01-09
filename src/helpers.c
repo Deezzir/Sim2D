@@ -200,7 +200,7 @@ void collision_sim_0(vec2 pos1, vec2 pos2, vec2 vel1, vec2 vel2, float m1, float
     vec2 pos2_diff = vec2_sub(pos2, pos1);
     vec2 vel2_diff = vec2_sub(vel2, vel1);
 
-    float new_vel1_mag = (2.0f * m1) / (m1 + m2) * vec2_dot(vel1_diff, pos1_diff) / vec2_sqr_mag(pos1_diff);
+    float new_vel1_mag = (2.0f * m2) / (m1 + m2) * vec2_dot(vel1_diff, pos1_diff) / vec2_sqr_mag(pos1_diff);
     float new_vel2_mag = (2.0f * m1) / (m1 + m2) * vec2_dot(vel2_diff, pos2_diff) / vec2_sqr_mag(pos2_diff);
 
     *vel1_new = vec2_sub(vel1, vec2_mul_scalar(pos1_diff, new_vel1_mag));

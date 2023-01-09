@@ -2,6 +2,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <limits.h>
 
 #include "main.h"
 
@@ -141,21 +142,22 @@ void _solve_collisions_voronoi() {
                 vec2 vel2 = seed_velocities[j];
                 int rad1 = seed_mark_radii[i];
                 int rad2 = seed_mark_radii[j];
+                int c1 = (int)i == drag_seed_index;
+                int c2 = (int)j == drag_seed_index;
 
-                if (vec2_is_zero(vel1)&& (int)i == drag_seed_index) {
-                    rad1 = 1000000;
-                } else if (vec2_is_zero(vel2) && (int)j == drag_seed_index) {
-                    rad2 = 1000000;
-                }
-
+                rad1 = INT_MAX * (c1 && vec2_is_zero(vel1)) + rad1 * !(c1 && vec2_is_zero(vel1));
+                rad2 = INT_MAX * (c2 && vec2_is_zero(vel2)) + rad2 * !(c2 && vec2_is_zero(vel2));
+       
                 collision_sim_0(pos1, pos2, vel1, vel2, rad1, rad2,
                                 &seed_velocities[i], &seed_velocities[j]);
 
                 // Move the current seed apart
                 float delta = radii_sum - dist;
                 vec2 n = vec2_div_scalar(vec2_sub(pos1, pos2), dist);
-                seed_positions[i] = vec2_add(seed_positions[i], vec2_mul_scalar(n, delta * 0.5f));
-                seed_positions[j] = vec2_add(seed_positions[j], vec2_mul_scalar(n, delta * -0.5f));
+                float delta1 = !c2 * (delta * 0.5f) + c2 * delta;
+                float delta2 = !c1 * (delta * -0.5f) + c1 * delta * -1.0f;
+                seed_positions[i] = vec2_add(seed_positions[i], vec2_mul_scalar(n, delta1));
+                seed_positions[j] = vec2_add(seed_positions[j], vec2_mul_scalar(n, delta2));
             }
         }
     }
