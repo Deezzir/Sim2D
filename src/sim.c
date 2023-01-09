@@ -16,7 +16,7 @@ void _generate_seed_velocity(int seed_idx, float mag);
 
 void _apply_constraints(int width, int height);
 void _update_positions(double delta_time);
-void _check_drag(GLFWwindow* window, double delta_time);
+void _check_drag(GLFWwindow* window, int height, double delta_time);
 void _solve_collisions_voronoi();
 void _solve_collisions_bubbles();
 
@@ -139,9 +139,16 @@ void _solve_collisions_voronoi() {
             if (dist < radii_sum) {
                 vec2 vel1 = seed_velocities[i];
                 vec2 vel2 = seed_velocities[j];
+                int rad1 = seed_mark_radii[i];
+                int rad2 = seed_mark_radii[j];
 
-                collision_sim_0(pos1, pos2, vel1, vel2,
-                                seed_mark_radii[i], seed_mark_radii[j],
+                if (vec2_is_zero(vel1)&& (int)i == drag_seed_index) {
+                    rad1 = 1000000;
+                } else if (vec2_is_zero(vel2) && (int)j == drag_seed_index) {
+                    rad2 = 1000000;
+                }
+
+                collision_sim_0(pos1, pos2, vel1, vel2, rad1, rad2,
                                 &seed_velocities[i], &seed_velocities[j]);
 
                 // Move the current seed apart
@@ -183,15 +190,14 @@ void _solve_collisions_bubbles() {
 
 void _update_positions(double delta_time) {
     for (size_t i = 0; i < SEED_COUNT; i++) {
-        seed_positions[i] = vec2_add(seed_positions[i], vec2_mul_scalar(seed_velocities[i], delta_time));
+        if (drag_seed_index != (int)i)
+            seed_positions[i] = vec2_add(seed_positions[i], vec2_mul_scalar(seed_velocities[i], delta_time));
     }
 }
 
-void _check_drag(GLFWwindow* window, double delta_time) {
+void _check_drag(GLFWwindow* window, int height, double delta_time) {
     double xpos, ypos;
-    int height;
     glfwGetCursorPos(window, &xpos, &ypos);
-    glfwGetWindowSize(window, NULL, &height);
     vec2 cur_mouse_pos = (vec2){(float)xpos, height - (float)ypos};
 
     if (IS_DRAG_MODE) {
@@ -205,16 +211,14 @@ void _check_drag(GLFWwindow* window, double delta_time) {
 
         if (drag_seed_index != -1) {
             seed_positions[drag_seed_index] = cur_mouse_pos;
-            seed_velocities[drag_seed_index] = (vec2){0.0f, 0.0f};
+
+            vec2 delta_cursor = vec2_sub(cur_mouse_pos, last_mouse_pos);
+            seed_velocities[drag_seed_index] = vec2_div_scalar(delta_cursor, delta_time * 2.0f);
             last_mouse_pos = cur_mouse_pos;
         }
     } else {
-        if (drag_seed_index != -1) {
-            vec2 cursor_movement = vec2_sub(cur_mouse_pos, last_mouse_pos);
-            seed_velocities[drag_seed_index] = vec2_div_scalar(cursor_movement, delta_time * 1.5f);
-            last_mouse_pos = cur_mouse_pos;
-        }
         drag_seed_index = -1;
+        last_mouse_pos = cur_mouse_pos;
     }
 }
 
@@ -241,7 +245,7 @@ void _render_voronoi_frame(GLFWwindow* window, double delta_time, int width, int
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     _apply_constraints(width, height);
-    _check_drag(window, delta_time);
+    _check_drag(window, height, delta_time);
     _solve_collisions();
     _update_positions(delta_time);
 
