@@ -3,17 +3,16 @@
 #include <assert.h>
 #include <errno.h>
 #include <math.h>
+#include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <signal.h>
 
 #include "main.h"
 
 // This source inner helpers
 void _invalid_arg_exit();
-void _signal_handler(int signal);
 
 float _sqr_dist(float x1, float y1, float x2, float y2);
 float _dist(float x1, float y1, float x2, float y2);
@@ -29,7 +28,7 @@ int opt_index = 1;
 
 // Function definitions
 // ---------------------
-void usage() {
+void usage(void) {
     printf("usage: sim [-m num] [-c num] [-r num]\n");
     printf("       Optionally specify simulation mode: [-m] (%u-%u). By default Mode 1 is chosen\n", 1, COUNT_MODES);
     printf("              Mode 1: - 'Voronoi'\n");
@@ -37,17 +36,6 @@ void usage() {
     printf("              Mode 3: - 'Bubbles'\n");
     printf("       Optionally specify seed count:      [-c] (%u-%u)\n", 1, SEED_MAX_COUNT);
     printf("       Optionally specify seed radius:     [-r] (%u-%u). Only works with 'voronoi' and 'atoms' modes\n", SEED_MIN_RADIUS, SEED_MAX_RADIUS);
-}
-
-void init_signal_handler() {
-    struct sigaction action;
-    action.sa_handler = &_signal_handler;
-    sigemptyset(&action.sa_mask);
-    action.sa_flags = 0;
-    if (sigaction(SIGINT, &action, NULL) < 0) {
-        printf("[ERROR]: failed to set signal action");
-        exit(EXIT_FAILURE);
-    }
 }
 
 void get_arguments(int argc, char **argv) {
@@ -115,8 +103,7 @@ void get_arguments(int argc, char **argv) {
     }
 }
 
-
-float rand_float() {
+float rand_float(void) {
     return (float)rand() / (float)RAND_MAX;
 }
 
@@ -156,7 +143,7 @@ vec2 vec2_sub(vec2 v1, vec2 v2) {
     return (vec2){v1.x - v2.x, v1.y - v2.y};
 }
 
-vec2 vec2_mul_scalar(vec2 v, float s) {
+vec2 vec2_scale(vec2 v, float s) {
     return (vec2){v.x * s, v.y * s};
 }
 
@@ -189,25 +176,25 @@ bool vec2_is_zero(vec2 v) {
     return v.x == 0.0f && v.y == 0.0f;
 }
 
-void collision_sim_0(vec2 pos1, vec2 pos2, vec2 vel1, vec2 vel2, float m1, float m2, vec2 *vel1_new, vec2 *vel2_new) {
+void collision_sim_0(vec2 pos1, vec2 pos2, float m1, float m2, vec2 *vel1, vec2 *vel2) {
     assert(m1 > 0.0f && m2 > 0.0f);
     assert(vec2_sqr_dist(pos1, pos2) > 0.0f);
 
     // new_vel1 = vel1 - (2 * m2 / (m1 + m2)) * ((vel1 - vel2) • (pos1 - pos2)) / ||pos1 - pos2||^2 * (pos1 - pos2)
     // new_vel2 = vel2 - (2 * m1 / (m1 + m2)) * ((vel2 - vel1) • (pos2 - pos1)) / ||pos2 - pos1||^2 * (pos2 - pos1)
     vec2 pos1_diff = vec2_sub(pos1, pos2);
-    vec2 vel1_diff = vec2_sub(vel1, vel2);
+    vec2 vel1_diff = vec2_sub(*vel1, *vel2);
     vec2 pos2_diff = vec2_sub(pos2, pos1);
-    vec2 vel2_diff = vec2_sub(vel2, vel1);
+    vec2 vel2_diff = vec2_sub(*vel2, *vel1);
 
     float new_vel1_mag = (2.0f * m2) / (m1 + m2) * vec2_dot(vel1_diff, pos1_diff) / vec2_sqr_mag(pos1_diff);
     float new_vel2_mag = (2.0f * m1) / (m1 + m2) * vec2_dot(vel2_diff, pos2_diff) / vec2_sqr_mag(pos2_diff);
 
-    *vel1_new = vec2_sub(vel1, vec2_mul_scalar(pos1_diff, new_vel1_mag));
-    *vel2_new = vec2_sub(vel2, vec2_mul_scalar(pos2_diff, new_vel2_mag));
+    *vel1 = vec2_sub(*vel1, vec2_scale(pos1_diff, new_vel1_mag));
+    *vel2 = vec2_sub(*vel2, vec2_scale(pos2_diff, new_vel2_mag));
 }
 
-void collision_sim_1(vec2 pos1, vec2 pos2, vec2 vel1, vec2 vel2, float m1, float m2, vec2 *vel1_new, vec2 *vel2_new) {
+void collision_sim_1(vec2 pos1, vec2 pos2, float m1, float m2, vec2 *vel1, vec2 *vel2) {
     assert(m1 > 0.0f && m2 > 0.0f);
     assert(vec2_sqr_dist(pos1, pos2) > 0.0f);
 
@@ -216,10 +203,10 @@ void collision_sim_1(vec2 pos1, vec2 pos2, vec2 vel1, vec2 vel2, float m1, float
     vec2 ut = vec2_unit_tangent(pos1, pos2);
 
     // Calculate scalar velocity along unit normal and unit tangent
-    float v1n = vec2_dot(vel1, un);
-    float v1t = vec2_dot(vel1, ut);
-    float v2n = vec2_dot(vel2, un);
-    float v2t = vec2_dot(vel2, ut);
+    float v1n = vec2_dot(*vel1, un);
+    float v1t = vec2_dot(*vel1, ut);
+    float v2n = vec2_dot(*vel2, un);
+    float v2t = vec2_dot(*vel2, ut);
 
     // Calculate new normal velocities
     float v1n_new = (v1n * (m1 - m2) + 2 * m2 * v2n) / (m1 + m2);
@@ -230,8 +217,8 @@ void collision_sim_1(vec2 pos1, vec2 pos2, vec2 vel1, vec2 vel2, float m1, float
     float v2t_new = v2t;
 
     // Calculate new velocities in the normal and tangential directions
-    *vel1_new = vec2_add(vec2_mul_scalar(un, v1n_new), vec2_mul_scalar(ut, v1t_new));
-    *vel2_new = vec2_add(vec2_mul_scalar(un, v2n_new), vec2_mul_scalar(ut, v2t_new));
+    *vel1 = vec2_add(vec2_scale(un, v1n_new), vec2_scale(ut, v1t_new));
+    *vel2 = vec2_add(vec2_scale(un, v2n_new), vec2_scale(ut, v2t_new));
 }
 
 float _sqr_dist(float x1, float y1, float x2, float y2) {
@@ -242,20 +229,9 @@ float _sqr_dist(float x1, float y1, float x2, float y2) {
 
 // Private function definitions
 // ---------------------
-void _invalid_arg_exit() {
+void _invalid_arg_exit(void) {
     usage();
     exit(EINVAL);
-}
-
-void _signal_handler(int signal) {
-    switch (signal) {
-    case SIGINT:
-        IS_RUNNING = false;
-        break;
-    
-    default:
-        break;
-    }
 }
 
 float _dist(float x1, float y1, float x2, float y2) {

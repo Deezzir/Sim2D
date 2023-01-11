@@ -14,8 +14,9 @@ SIM_FILE=src/sim.c
 GLEXTLOADER_FILE=src/glextloader.c
 OPENGL_FILE=src/opengl.c
 HELPERS_FILE=src/helpers.c
+HEADERS=include/*.h
 
-sim: $(HELPERS_FILE) $(SIM_FILE) $(GLEXTLOADER_FILE) $(OPENGL_FILE) $(MAIN_FILE) 
+sim: $(HELPERS_FILE) $(SIM_FILE) $(GLEXTLOADER_FILE) $(OPENGL_FILE) $(MAIN_FILE) $(HEADERS)
 	$(CC) $(CFLAGS) $^ -o $@ -lglfw -lGL -lm
 
 voronoi: $(VORONOI_PPM_FILE)

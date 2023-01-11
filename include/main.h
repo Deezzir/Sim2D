@@ -15,13 +15,6 @@
 #define ATOMS_FRAGMENT_FILE_PATH "shaders/atoms.frag"
 #define BUBBLES_FRAGMENT_FILE_PATH "shaders/bubbles.frag"
 
-// Macros
-#define UNREACHABLE(message)                                                      \
-    do {                                                                          \
-        fprintf(stderr, "%s:%d: UNREACHABLE: %s\n", __FILE__, __LINE__, message); \
-        exit(1);                                                                  \
-    } while (0)
-
 // Constants
 // ---------------------
 // Window properties
@@ -33,24 +26,24 @@
 #define DEFAULT_SEED_COUNT 20
 #define DEFAULT_SEED_RADIUS 15
 
-#define SEED_MAX_COUNT 500
+#define SEED_MAX_COUNT 200
 #define SEED_MIN_RADIUS 5
 #define SEED_MAX_RADIUS 150
 
 // Simulation properties
-#define SUB_STEPS 8
+#define SUB_STEPS 10
 
 typedef enum {
     VORONOI_FRAGMENT = 0,
     ATOMS_FRAGMENT,
     BUBBLES_FRAGMENT,
     COUNT_FRAGMENTS
-} Fragment;
+} FragmentFile;
 
 typedef enum {
     GENERAL_VERTEX = 0,
     COUNT_VERTICES
-} Vertex;
+} VertexFile;
 
 typedef enum {
     ATTRIB_POS = 0,
@@ -71,15 +64,20 @@ typedef enum {
     COUNT_UNIFORMS
 } Uniform;
 
+typedef struct {
+    vec2 pos;
+    vec4 color;
+    int radius;
+    vec2 vel;
+    vec2 acc;
+} Seed;
+
 extern const char* uniform_names[COUNT_UNIFORMS];
 extern const char* mode_names[COUNT_MODES];
 extern const char* vertex_files[COUNT_VERTICES];
 extern const char* fragment_files[COUNT_FRAGMENTS];
 
-extern vec2* seed_positions;
-extern vec2* seed_velocities;
-extern vec4* seed_colors;
-extern GLint* seed_mark_radii;
+extern Seed* seeds;
 
 extern int SEED_RADIUS;
 extern size_t SEED_COUNT;
@@ -91,7 +89,8 @@ extern bool IS_RUNNING;
 extern bool IS_DRAG_MODE;
 
 extern GLint uniforms[COUNT_UNIFORMS];
-extern GLuint vbos[COUNT_ATTRIBS];
+extern GLuint vbo;
+extern GLuint vao;
 
 extern void (*render_frame)(GLFWwindow*, double, int, int);
 
@@ -99,12 +98,12 @@ extern void (*render_frame)(GLFWwindow*, double, int, int);
 // ---------------------
 void render_loop(GLFWwindow* window);
 void init_sim_mode(Mode mode);
-void free_sim_mode();
+void free_sim_mode(void);
 
-void init_glfw_settings();
-GLFWwindow* init_glfw_window();
+void init_glfw_settings(void);
+GLFWwindow* init_glfw_window(void);
 void init_glfw_callbacks(GLFWwindow* window);
-void init_gl_settings();
+void init_gl_settings(void);
 void init_gl_uniforms(GLuint program);
 void init_shaders(GLuint* program, const char* vert_file_path, const char* frag_file_path);
 void update_gl_uniforms(int width, int height);

@@ -38,7 +38,8 @@ const char* fragment_files[COUNT_FRAGMENTS] = {
     [BUBBLES_FRAGMENT] = BUBBLES_FRAGMENT_FILE_PATH,
 };
 
-GLuint vbos[COUNT_ATTRIBS];
+GLuint vbo = 0;
+GLuint vao = 0;
 GLint uniforms[COUNT_UNIFORMS];
 
 // Function definitions
@@ -66,7 +67,7 @@ void init_glfw_settings(void) {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
 }
 
-GLFWwindow* init_glfw_window() {
+GLFWwindow* init_glfw_window(void) {
     GLFWwindow* window = glfwCreateWindow(
         DEFAULT_SCREEN_WIDTH,
         DEFAULT_SCREEN_HEIGHT,
@@ -106,55 +107,45 @@ void init_glfw_callbacks(GLFWwindow* window) {
     glfwSetFramebufferSizeCallback(window, _window_resize_callback);
 }
 
-void init_gl_settings() {
+void init_gl_settings(void) {
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    GLuint vao;
     glGenVertexArrays(1, &vao);
     glBindVertexArray(vao);
 
-    glGenBuffers(COUNT_ATTRIBS, vbos);
-    {
-        glGenBuffers(1, &vbos[ATTRIB_POS]);
-        glBindBuffer(GL_ARRAY_BUFFER, vbos[ATTRIB_POS]);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(vec2) * SEED_COUNT, seed_positions, GL_STATIC_DRAW);
+    glGenBuffers(1, &vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(seeds[0]) * SEED_COUNT, seeds, GL_DYNAMIC_DRAW);
 
+    {
         glEnableVertexAttribArray(ATTRIB_POS);
         glVertexAttribPointer(ATTRIB_POS,
                               2,
                               GL_FLOAT,
                               GL_FALSE,
-                              0,
+                              sizeof(seeds[0]),
                               (void*)0);
         glVertexAttribDivisor(ATTRIB_POS, 1);
     }
     {
-        glGenBuffers(1, &vbos[ATTRIB_COLOR]);
-        glBindBuffer(GL_ARRAY_BUFFER, vbos[ATTRIB_COLOR]);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(vec4) * SEED_COUNT, seed_colors, GL_STATIC_DRAW);
-
         glEnableVertexAttribArray(ATTRIB_COLOR);
         glVertexAttribPointer(ATTRIB_COLOR,
                               4,
                               GL_FLOAT,
                               GL_FALSE,
-                              0,
-                              (void*)0);
+                              sizeof(seeds[0]),
+                              (void*)(sizeof(float) * 2));
         glVertexAttribDivisor(ATTRIB_COLOR, 1);
     }
     {
-        glGenBuffers(1, &vbos[ATTRIB_RADIUS]);
-        glBindBuffer(GL_ARRAY_BUFFER, vbos[ATTRIB_RADIUS]);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(GLint) * SEED_COUNT, seed_mark_radii, GL_STATIC_DRAW);
-
         glEnableVertexAttribArray(ATTRIB_RADIUS);
         glVertexAttribIPointer(ATTRIB_RADIUS,
                                1,
                                GL_INT,
-                               0,
-                               (void*)0);
+                               sizeof(seeds[0]),
+                               (void*)(sizeof(float) * 6));
         glVertexAttribDivisor(ATTRIB_RADIUS, 1);
     }
 }
@@ -296,10 +287,10 @@ bool _load_shader_program(const char* vertex_file_path, const char* fragment_fil
 // Callbacks
 void _message_callback(GLenum source, GLenum type, GLuint id, GLenum severity,
                       GLsizei length, const GLchar* message, const void* userParam) {
-    (void)source;
-    (void)id;
-    (void)length;
-    (void)userParam;
+    UNUSED(source);
+    UNUSED(id);
+    UNUSED(length);
+    UNUSED(userParam);
 
     fprintf(stderr, "GL CALLBACK: %s source = 0x%x, type = 0x%x, severity = 0x%x, message = %s\n",
             (type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""),
@@ -307,14 +298,14 @@ void _message_callback(GLenum source, GLenum type, GLuint id, GLenum severity,
 }
 
 void _window_resize_callback(GLFWwindow* window, int width, int height) {
-    (void)window;
+    UNUSED(window);
     glViewport(0, 0, width, height);
 }
 
 void _key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
-    (void)scancode;
-    (void)mods;
-    (void)window;
+    UNUSED(scancode);
+    UNUSED(mods);
+    UNUSED(window);
 
     if (action == GLFW_PRESS) {
         if (key == GLFW_KEY_SPACE) {
@@ -339,8 +330,8 @@ void _key_callback(GLFWwindow* window, int key, int scancode, int action, int mo
 }
 
 void _mouse_callback(GLFWwindow* window, int button, int action, int mods) {
-    (void)mods;
-    (void)window;
+    UNUSED(mods);
+    UNUSED(window);
 
     if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT) {
         IS_DRAG_MODE = true;
